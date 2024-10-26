@@ -35,10 +35,11 @@ import java.io.IOException
  * UI state for the Home screen
  */
 sealed interface MarsUiState {
-    data class Success(val photos: List<MarsPhoto>) : MarsUiState
+    data class Success(val photos: String, val randomPhoto : MarsPhoto) : MarsUiState
     object Error : MarsUiState
     object Loading : MarsUiState
 }
+
 
 class MarsViewModel(private val marsPhotosRepository: MarsPhotosRepository) : ViewModel() {
     /** The mutable State that stores the status of the most recent request */
@@ -60,7 +61,9 @@ class MarsViewModel(private val marsPhotosRepository: MarsPhotosRepository) : Vi
         viewModelScope.launch {
             marsUiState = MarsUiState.Loading
             marsUiState = try {
-                MarsUiState.Success(marsPhotosRepository.getMarsPhotos())
+                val listResult = marsPhotosRepository.getMarsPhotos()
+                MarsUiState.Success( "Success: ${listResult.size} Mars photos retrieved", listResult.random())
+
             } catch (e: IOException) {
                 MarsUiState.Error
             } catch (e: HttpException) {

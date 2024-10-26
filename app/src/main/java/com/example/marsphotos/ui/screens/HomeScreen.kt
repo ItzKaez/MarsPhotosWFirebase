@@ -15,15 +15,22 @@
  */
 package com.example.marsphotos.ui.screens
 
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.marsphotos.network.MarsApiService
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -33,6 +40,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -41,8 +53,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import coil.compose.rememberAsyncImagePainter
+import coil.compose.rememberImagePainter
 import com.example.marsphotos.R
 import com.example.marsphotos.model.MarsPhoto
 import com.example.marsphotos.ui.theme.MarsPhotosTheme
@@ -56,8 +70,10 @@ fun HomeScreen(
 ) {
     when (marsUiState) {
         is MarsUiState.Loading -> LoadingScreen(modifier = modifier.fillMaxSize())
-        is MarsUiState.Success -> PhotosGridScreen(
-            marsUiState.photos, contentPadding = contentPadding, modifier = modifier.fillMaxWidth()
+        is MarsUiState.Success -> ResultScreen(
+            photos = marsUiState.photos,
+            randomPhoto = marsUiState.randomPhoto,
+            modifier = modifier.fillMaxWidth()
         )
         is MarsUiState.Error -> ErrorScreen(retryAction, modifier = modifier.fillMaxSize())
     }
@@ -75,8 +91,71 @@ fun LoadingScreen(modifier: Modifier = Modifier) {
     )
 }
 
+@Composable
+fun ResultScreen(
+    photos: String,
+    MarsViewModel: MarsViewModel = viewModel(),
+    randomPhoto: MarsPhoto,
+    modifier: Modifier = Modifier,
+    imageViewModel: ImageViewModel = viewModel()
+) {
+    var imageUrl by remember { mutableStateOf(imageViewModel.selectedImageUrl) }
+    var imageCount by remember { mutableStateOf(imageViewModel.imageCount) }
+
+    Column(
+        modifier = modifier
+    ) {
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(randomPhoto.imgSrc)
+                .crossfade(true)
+                .build(),
+            contentDescription = "A photo"
+        )
+        Text(text = photos)
+        imageUrl?.let {
+            Image(
+                painter = rememberAsyncImagePainter(model = it),
+                contentDescription = "Random Image",
+                modifier = Modifier.size(200.dp),
+                contentScale = ContentScale.Crop
+            )
+        }
+
+        Text(text = "Total images retrieved: $imageCount")
+
+        Row {
+            Button(onClick = {
+                imageUrl = imageViewModel.selectedImageUrl + "?grayscale"
+            }) {
+                Text(text = "Gray")
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(onClick = {
+                imageUrl = imageViewModel.selectedImageUrl + "?blur=5"
+            }) {
+                Text(text = "Blur")
+            }
+        }
+
+        Button(onClick = {
+            imageViewModel.fetchRandomImage()
+            imageUrl = imageViewModel.selectedImageUrl
+            imageCount = imageViewModel.imageCount
+            MarsViewModel.getMarsPhotos()
+        }) {
+            Text(text = "Roll")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+
 /**
  * The home screen displaying error message with re-attempt button.
+
+
+
  */
 @Composable
 fun ErrorScreen(retryAction: () -> Unit, modifier: Modifier = Modifier) {
