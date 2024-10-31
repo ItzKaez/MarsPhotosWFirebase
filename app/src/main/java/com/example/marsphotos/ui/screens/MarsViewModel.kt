@@ -15,6 +15,7 @@
  */
 package com.example.marsphotos.ui.screens
 
+import FirebaseViewModel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -41,17 +42,33 @@ sealed interface MarsUiState {
 }
 
 
-class MarsViewModel(private val marsPhotosRepository: MarsPhotosRepository) : ViewModel() {
+class MarsViewModel( private val marsPhotosRepository: MarsPhotosRepository, private val firebaseViewModel: FirebaseViewModel = FirebaseViewModel() ) : ViewModel() {
     /** The mutable State that stores the status of the most recent request */
     var marsUiState: MarsUiState by mutableStateOf(MarsUiState.Loading)
         private set
 
+    var currentImageUrl by mutableStateOf<String?>(null)
+
+    init {
+
+
+        // Observe the last saved Mars image and update currentImageUrl when it changes
+        firebaseViewModel.lastSavedMarsImage.observeForever { image ->
+            image?.let { currentImageUrl = it.url }
+        }
+
+        getMarsPhotos()
+    }
+
+    fun loadLastSavedImage() {
+        firebaseViewModel.loadLastSavedImage("Mars")
+    }
+
+
     /**
      * Call getMarsPhotos() on init so we can display status immediately.
      */
-    init {
-        getMarsPhotos()
-    }
+
 
     /**
      * Gets Mars photos information from the Mars API Retrofit service and updates the
@@ -70,6 +87,13 @@ class MarsViewModel(private val marsPhotosRepository: MarsPhotosRepository) : Vi
                 MarsUiState.Error
             }
         }
+    }
+
+    fun saveMarsPhoto(url: String) {
+        firebaseViewModel.savePhotoToFirebase(
+            url = url,
+            source = "Mars"
+        )
     }
 
     /**

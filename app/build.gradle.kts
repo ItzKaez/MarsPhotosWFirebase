@@ -18,6 +18,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.10"
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -67,6 +68,9 @@ android {
 }
 
 dependencies {
+
+    implementation("com.google.firebase:firebase-database-ktx:21.0.0")
+    implementation("com.google.firebase:firebase-storage-ktx:21.0.1")
 
     implementation ("io.coil-kt:coil-compose:2.4.0") // For image loading
     implementation ("com.squareup.retrofit2:retrofit:2.9.0") // For API requests

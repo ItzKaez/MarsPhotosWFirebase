@@ -15,9 +15,9 @@
  */
 package com.example.marsphotos.ui.screens
 
+import FirebaseViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.example.marsphotos.network.MarsApiService
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,7 +30,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -40,7 +39,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,20 +51,20 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
-import coil.compose.rememberImagePainter
 import com.example.marsphotos.R
 import com.example.marsphotos.model.MarsPhoto
 import com.example.marsphotos.ui.theme.MarsPhotosTheme
+
 
 @Composable
 fun HomeScreen(
     marsUiState: MarsUiState,
     retryAction: () -> Unit,
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(0.dp),
+    contentPadding: PaddingValues,
 ) {
     when (marsUiState) {
         is MarsUiState.Loading -> LoadingScreen(modifier = modifier.fillMaxSize())
@@ -97,17 +95,28 @@ fun ResultScreen(
     MarsViewModel: MarsViewModel = viewModel(),
     randomPhoto: MarsPhoto,
     modifier: Modifier = Modifier,
-    imageViewModel: ImageViewModel = viewModel()
+    imageViewModel: ImageViewModel = viewModel(),
+    firebaseViewModel: FirebaseViewModel = viewModel()
 ) {
     var imageUrl by remember { mutableStateOf(imageViewModel.selectedImageUrl) }
     var imageCount by remember { mutableStateOf(imageViewModel.imageCount) }
 
+
+    // Observe current image URLs
+    var marsImageUrl by remember { mutableStateOf(randomPhoto.imgSrc) }
+    val picsumImageUrl by remember { mutableStateOf(imageViewModel.currentImageUrl) }
+    val rolls by remember { mutableStateOf(firebaseViewModel.rolls.value) }
+
+
+    var save by remember { mutableStateOf("") }
+
     Column(
         modifier = modifier
     ) {
+        Spacer(modifier = Modifier.height(16.dp))
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
-                .data(randomPhoto.imgSrc)
+                .data(marsImageUrl)
                 .crossfade(true)
                 .build(),
             contentDescription = "A photo"
@@ -124,31 +133,64 @@ fun ResultScreen(
 
         Text(text = "Total images retrieved: $imageCount")
 
-        Row {
+        Text(text = "Number of rolls: ${rolls.toString()}")
+        Text(text = save)
+
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
             Button(onClick = {
                 imageUrl = imageViewModel.selectedImageUrl + "?grayscale"
-            }) {
-                Text(text = "Gray")
+            }, modifier = Modifier.weight(1f)) {
+                Text(text = "Gray", fontSize = 10.sp)
             }
-            Spacer(modifier = Modifier.width(8.dp))
             Button(onClick = {
                 imageUrl = imageViewModel.selectedImageUrl + "?blur=5"
-            }) {
-                Text(text = "Blur")
+            }, modifier = Modifier.weight(1f)) {
+                Text(text = "Blur", fontSize = 10.sp)
+            }
+            Button(onClick = {
+                imageViewModel.fetchRandomImage()
+                imageUrl = imageViewModel.selectedImageUrl
+                imageCount = imageViewModel.imageCount
+                MarsViewModel.getMarsPhotos()
+
+                save = ""
+
+                //save each roll number to firebase
+                firebaseViewModel.updateCounter()
+            }, modifier = Modifier.weight(1f)) {
+                Text(text = "Roll", fontSize = 10.sp)
+            }
+            Button(onClick = {
+                // Save the photo info to Firebase
+                MarsViewModel.saveMarsPhoto(
+                    url = randomPhoto.imgSrc
+                )
+                imageViewModel.savePicsumPhoto(
+                    url = imageUrl ?: ""
+                )
+                save = "Saved"
+                MarsViewModel.loadLastSavedImage()
+                imageViewModel.loadLastSavedImage()
+            }, modifier = Modifier.weight(1f)) {
+                Text(text = "Save", fontSize = 10.sp)
+            }
+            Button(onClick = {
+                imageUrl = picsumImageUrl
+                marsImageUrl = MarsViewModel.currentImageUrl.toString()
+            }, modifier = Modifier.weight(1f)) {
+                Text(text = "Load", fontSize = 10.sp)
             }
         }
 
-        Button(onClick = {
-            imageViewModel.fetchRandomImage()
-            imageUrl = imageViewModel.selectedImageUrl
-            imageCount = imageViewModel.imageCount
-            MarsViewModel.getMarsPhotos()
-        }) {
-            Text(text = "Roll")
-        }
-        Spacer(modifier = Modifier.height(16.dp))
+
+
     }
 }
+
 
 
 /**
