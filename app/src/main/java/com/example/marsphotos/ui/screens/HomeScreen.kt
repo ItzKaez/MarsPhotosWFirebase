@@ -16,6 +16,12 @@
 package com.example.marsphotos.ui.screens
 
 import FirebaseViewModel
+import android.content.Context
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.foundation.Image
@@ -52,11 +58,23 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.example.marsphotos.R
 import com.example.marsphotos.model.MarsPhoto
 import com.example.marsphotos.ui.theme.MarsPhotosTheme
+import com.google.firebase.database.ktx.database
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageReference
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.InputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Objects
 
 
 @Composable
@@ -89,6 +107,47 @@ fun LoadingScreen(modifier: Modifier = Modifier) {
     )
 }
 
+//Auxiliar function to create file name
+fun Context.createImageFile(): File {
+    // Create an image file name
+    val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
+    val imageFileName = "JPEG_" + timeStamp + "_"
+    val image = File.createTempFile(
+        imageFileName, /* prefix */
+        ".jpg", /* suffix */
+        externalCacheDir /* directory */
+    )
+    return image
+}
+
+fun uriToBase64(context: Context, uri: Uri): String {
+    val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
+    val byteBuffer = ByteArrayOutputStream()
+    val bufferSize = 1024
+    val buffer = ByteArray(bufferSize)
+
+    var len: Int
+    while (inputStream?.read(buffer).also { len = it ?: -1 } != -1) {
+        byteBuffer.write(buffer, 0, len)
+    }
+
+    val byteArray = byteBuffer.toByteArray()
+    return Base64.encodeToString(byteArray, Base64.DEFAULT)
+}
+
+fun saveBase64ToFirebase(base64String: String, source: String) {
+    val database = Firebase.database("https://marsphotos-f32fc-default-rtdb.europe-west1.firebasedatabase.app/")
+    val photosRef = database.getReference("photos")
+
+    val photoData = mapOf(
+        "base64" to base64String,
+        "source" to source,
+        "timestamp" to System.currentTimeMillis()
+    )
+
+    photosRef.push().setValue(photoData)
+}
+
 @Composable
 fun ResultScreen(
     photos: String,
@@ -109,6 +168,26 @@ fun ResultScreen(
 
 
     var save by remember { mutableStateOf("") }
+
+
+    val context = LocalContext.current
+    val file = context.createImageFile()
+    val uri = FileProvider.getUriForFile(
+        Objects.requireNonNull(context),
+        context.getPackageName() + ".provider", file
+    )
+    var capturedImageUri by remember {
+        mutableStateOf<Uri>(Uri.EMPTY)
+    }
+    val cameraLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) {
+            capturedImageUri = uri
+        }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        cameraLauncher.launch(uri)
+    }
 
     Column(
         modifier = modifier
@@ -185,9 +264,37 @@ fun ResultScreen(
                 Text(text = "Load", fontSize = 10.sp)
             }
         }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        )
+
+        {
+            Button(onClick = {
+                val permissionCheckResult =
+                    ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA)
+                if (permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
+                    cameraLauncher.launch(uri)
+                } else {
+                    // Request a permission
+                    permissionLauncher.launch(android.Manifest.permission.CAMERA)
+                }
+            }) {
+                Text(text = "Photo")
+            }
+        }
 
 
 
+    }
+    if (capturedImageUri.path?.isNotEmpty() == true) {
+        val context = LocalContext.current
+        val base64String = uriToBase64(context, capturedImageUri)
+        saveBase64ToFirebase(base64String, "Camera")
+        AsyncImage(
+            model = capturedImageUri, contentDescription = "photo", modifier = Modifier
+                .padding(50.dp, 50.dp).fillMaxSize()
+        )
     }
 }
 
